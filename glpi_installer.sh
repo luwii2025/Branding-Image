@@ -231,19 +231,17 @@ body, .page, .main-container {
 body.welcome-anonymous {
   --tblr-bg-surface: rgba(255, 255, 255, 0.12) !important;
 }
-
+ 
 .welcome-anonymous .card,
 .welcome-anonymous .card-md,
 .welcome-anonymous .main-content-card {
-  --tblr-bg-surface: rgba(255, 255, 255, 0.12) !important;
+  --tblr-bg-surface: var(--tblr-bg-surface) !important;
   background-color: rgba(255, 255, 255, 0.12) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  border-top: 4px solid var(--brand-accent) !important;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
 }
-
+ 
 /* ────────────────────────────────────────────────
    LOGIN PAGE
    ──────────────────────────────────────────────── */
@@ -252,7 +250,7 @@ body.welcome-anonymous {
 body.login {
   background: url('/pics/${BG_FILENAME}') center center / cover no-repeat fixed !important;
 }
-
+ 
 .login-page::before {
   content: "";
   position: fixed;
@@ -260,19 +258,19 @@ body.login {
   background: rgba(0,0,0,0.45);
   z-index: 0;
 }
-
+ 
 .login-page .col-md-4,
 .login-page .login-left,
 .login-page .plugin-mod-brand {
   display: none !important;
 }
-
+ 
 .login-page .col-md-8 {
   max-width: 440px !important;
   margin: auto !important;
   flex: none !important;
 }
-
+ 
 .login-page .login-box,
 .login-page .card {
   position: relative;
@@ -285,7 +283,7 @@ body.login {
   border: 1px solid rgba(255, 255, 255, 0.25) !important;
   border-top: 4px solid var(--brand-accent) !important;
 }
-
+ 
 /* Labels and text inside the login card — white for visibility */
 .login-page .card label,
 .login-page .card .form-label,
@@ -294,24 +292,23 @@ body.login {
   color: #ffffff !important;
   text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
-
+ 
 /* Input fields — semi-transparent */
 .login-page .form-control,
 .login-page input[type="text"],
 .login-page input[type="password"],
 .login-page select,
 .login-page .form-select {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  background-color: rgba(255, 255, 255, 0) !important;
   color: #ffffff !important;
   border-radius: var(--brand-radius) !important;
 }
-
+ 
 .login-page .form-control::placeholder,
 .login-page input::placeholder {
   color: rgba(255, 255, 255, 0.6) !important;
 }
-
+ 
 .login-page .form-control:focus,
 .login-page input:focus {
   background-color: rgba(255, 255, 255, 0.3) !important;
@@ -319,18 +316,18 @@ body.login {
   box-shadow: 0 0 0 3px rgba(207, 191, 17, 0.25) !important;
   color: #ffffff !important;
 }
-
+ 
 /* Select dropdown arrow fix */
 .login-page .form-select option {
   background-color: var(--brand-primary) !important;
   color: #ffffff !important;
 }
-
+ 
 /* Remember me checkbox label */
 .login-page .form-check-label {
   color: #ffffff !important;
 }
-
+ 
 /* Login to your account header */
 .login-page .card-header,
 .login-page .login-header {
@@ -338,7 +335,7 @@ body.login {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
   color: #ffffff !important;
 }
-
+ 
 .login-page .login-logo img,
 .login-page img.logo,
 .login-page .logo img {
@@ -348,7 +345,7 @@ body.login {
   display: block;
   margin: 0 auto 24px auto;
 }
-
+ 
 .login-page .btn-primary,
 .login-page input[type="submit"],
 .login-page button[type="submit"] {
@@ -362,7 +359,7 @@ body.login {
   text-transform: uppercase;
   transition: all 0.2s ease-in-out;
 }
-
+ 
 .login-page .btn-primary:hover,
 .login-page input[type="submit"]:hover {
   filter: brightness(1.1);
