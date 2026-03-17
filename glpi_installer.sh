@@ -1,0 +1,850 @@
+#!/bin/bash
+# ==============================================================================
+# GLPI Full Setup + Branding Script
+# Installs GLPI, bypasses web setup, and applies full UI branding in one run
+# ==============================================================================
+set -eu
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CONFIGURATION — Edit everything here
+# ──────────────────────────────────────────────────────────────────────────────
+GLPI_VER="11.0.6"
+GLPI_DIR="/var/www/html/glpi"
+WEB_USER="www-data"
+WEB_GROUP="www-data"
+
+# Database
+DB_NAME="glpidb"
+DB_USER="sitadmin"
+DB_PASS='S3rv1c31T+'
+DB_HOST="localhost"
+
+# Plugin
+PLUGIN_URL="https://github.com/i-Vertix/glpi-modifications/releases/download/11.0.3/glpi-mod-11.0.3.tar.gz"
+DOWNLOAD_DEST="/tmp/glpi-mod.tar.gz"
+FINAL_PLUGIN_FOLDER="mod"
+
+# Branding images (GitHub raw URLs)
+GITHUB_BG_URL="https://raw.githubusercontent.com/luwii2025/Branding-Image/main/bg.jpg"
+GITHUB_LOGO_SMALL_URL="https://raw.githubusercontent.com/luwii2025/Branding-Image/main/55x55px.png"
+GITHUB_LOGO_MEDIUM_URL="https://raw.githubusercontent.com/luwii2025/Branding-Image/main/100x55px.png"
+GITHUB_LOGO_LARGE_URL="https://raw.githubusercontent.com/luwii2025/Branding-Image/main/250x138px.png"
+
+BG_FILENAME="custom_org_bg.png"
+LOGO_SMALL_FILENAME="custom_org_logo_small.png"
+LOGO_MEDIUM_FILENAME="custom_org_logo_medium.png"
+LOGO_LARGE_FILENAME="custom_org_logo_large.png"
+LOGO_FILENAME="$LOGO_LARGE_FILENAME"
+
+# Organization
+ORG_TITLE="My Organization IT Portal"
+
+# CSS output path
+CUSTOM_CSS_FILE="$GLPI_DIR/public/css/custom_branding.css"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ROOT CHECK
+# ──────────────────────────────────────────────────────────────────────────────
+if [[ $EUID -ne 0 ]]; then
+  echo "❌ This script must be run as root. Use: sudo ./glpi_setup.sh"
+  exit 1
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 1 — GLPI INSTALLATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📦 Step 1: Installing dependencies..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+apt-get update -q
+apt-get install -y -q \
+  apache2 mariadb-server libapache2-mod-php8.3 \
+  php8.3-cli php8.3-curl php8.3-gd php8.3-intl php8.3-mbstring \
+  php8.3-mysql php8.3-xml php8.3-zip php8.3-bz2 php8.3-ldap \
+  php8.3-bcmath php8.3-opcache php8.3-gmp php8.3-apcu \
+  wget tar python3
+echo "✅ Dependencies installed."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🗄️  Step 2: Configuring MariaDB..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+systemctl enable --now mariadb
+mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'${DB_HOST}' IDENTIFIED BY '${DB_PASS}';"
+mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'${DB_HOST}';"
+mysql -e "FLUSH PRIVILEGES;"
+echo "✅ Database '${DB_NAME}' and user '${DB_USER}' created."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⬇️  Step 3: Downloading GLPI ${GLPI_VER}..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+wget -q --show-progress -O /tmp/glpi.tgz \
+  "https://github.com/glpi-project/glpi/releases/download/${GLPI_VER}/glpi-${GLPI_VER}.tgz"
+rm -rf "$GLPI_DIR"
+tar -xzf /tmp/glpi.tgz -C /var/www/html/
+rm /tmp/glpi.tgz
+echo "✅ GLPI extracted to $GLPI_DIR"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔒 Step 4: Setting permissions..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+chown -R $WEB_USER:$WEB_GROUP "$GLPI_DIR"
+chmod -R 755 "$GLPI_DIR"
+
+# .htaccess files
+cat > "$GLPI_DIR/public/.htaccess" << 'HTEOF'
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+HTEOF
+
+cat > "$GLPI_DIR/.htaccess" << 'HTEOF'
+RewriteEngine On
+RewriteRule ^(.*)$ public/$1 [L]
+HTEOF
+
+chown $WEB_USER:$WEB_GROUP "$GLPI_DIR/public/.htaccess" "$GLPI_DIR/.htaccess"
+echo "✅ Permissions set."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🌐 Step 5: Configuring Apache..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cat > /etc/apache2/sites-available/glpi.conf << APACHEEOF
+<VirtualHost *:80>
+    ServerAdmin admin@example.com
+    DocumentRoot ${GLPI_DIR}/public
+    ServerName localhost
+
+    <Directory ${GLPI_DIR}/public>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog \${APACHE_LOG_DIR}/glpi_error.log
+    CustomLog \${APACHE_LOG_DIR}/glpi_access.log combined
+</VirtualHost>
+APACHEEOF
+
+a2dissite 000-default.conf 2>/dev/null || true
+a2ensite glpi.conf
+a2enmod rewrite
+systemctl restart apache2
+echo "✅ Apache configured."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚙️  Step 6: Installing GLPI database via CLI (bypassing web setup)..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cd "$GLPI_DIR"
+sudo -u $WEB_USER php bin/console db:install \
+  --db-host="$DB_HOST" \
+  --db-name="$DB_NAME" \
+  --db-user="$DB_USER" \
+  --db-password="$DB_PASS" \
+  --default-language=en_GB \
+  --no-interaction \
+  --force
+echo "✅ GLPI database installed — web setup wizard bypassed."
+
+# Remove the install folder so GLPI doesn't prompt for setup on first visit
+rm -rf "$GLPI_DIR/install"
+echo "✅ Install folder removed."
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PART 2 — BRANDING & PERSONALIZATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🚀 Phase 1: Downloading and Extracting Plugin..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# Ensure plugins directory exists
+mkdir -p "$GLPI_DIR/plugins/"
+cd "$GLPI_DIR/plugins/"
+
+wget -q --show-progress -O "$DOWNLOAD_DEST" "$PLUGIN_URL"
+EXTRACTED_FOLDER=$(tar -tf "$DOWNLOAD_DEST" | head -1 | cut -f1 -d"/")
+echo "   Extracted folder name: $EXTRACTED_FOLDER"
+if [ "$EXTRACTED_FOLDER" != "$FINAL_PLUGIN_FOLDER" ]; then
+  rm -rf "$FINAL_PLUGIN_FOLDER"
+fi
+tar -xzf "$DOWNLOAD_DEST"
+if [ "$EXTRACTED_FOLDER" != "$FINAL_PLUGIN_FOLDER" ]; then
+  echo "🔄 Renaming '$EXTRACTED_FOLDER' → '$FINAL_PLUGIN_FOLDER'..."
+  mv "$EXTRACTED_FOLDER" "$FINAL_PLUGIN_FOLDER"
+else
+  echo "ℹ️  Extracted folder is already named '$FINAL_PLUGIN_FOLDER' — no rename needed."
+fi
+rm "$DOWNLOAD_DEST"
+echo "✅ Plugin extracted."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🎨 Phase 2: Fetching Branding Assets from GitHub..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cd "$GLPI_DIR/public/pics"
+wget -q -O "$BG_FILENAME"           "$GITHUB_BG_URL"
+wget -q -O "$LOGO_SMALL_FILENAME"   "$GITHUB_LOGO_SMALL_URL"
+wget -q -O "$LOGO_MEDIUM_FILENAME"  "$GITHUB_LOGO_MEDIUM_URL"
+wget -q -O "$LOGO_LARGE_FILENAME"   "$GITHUB_LOGO_LARGE_URL"
+echo "✅ Assets downloaded:"
+echo "   Background    : $BG_FILENAME"
+echo "   Logo Small    : $LOGO_SMALL_FILENAME (55x55)"
+echo "   Logo Medium   : $LOGO_MEDIUM_FILENAME (100x55)"
+echo "   Logo Large    : $LOGO_LARGE_FILENAME (250x138)"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🖌️  Phase 3: Generating Custom CSS Branding File..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+mkdir -p "$(dirname "$CUSTOM_CSS_FILE")"
+
+cat > "$CUSTOM_CSS_FILE" << CSSEOF
+/* ============================================================
+   Custom GLPI Branding — Auto-generated by glpi_setup.sh
+   Organization : ${ORG_TITLE}
+   ============================================================ */
+
+/* ── Global font & base ── */
+body, .page, .main-container {
+  font-family: 'Poppins', 'Segoe UI', sans-serif !important;
+}
+
+/* ── CSS Variables ── */
+:root {
+  --brand-primary   : #1a3a5c;
+  --brand-accent    : #cfbf11;
+  --brand-secondary : #2d6ca8;
+  --brand-radius    : 8px;
+}
+
+/* ── Override Tabler UI surface variable on login page ── */
+.welcome-anonymous,
+.page-anonymous,
+body.welcome-anonymous {
+  --tblr-bg-surface: rgba(255, 255, 255, 0.12) !important;
+}
+
+.welcome-anonymous .card,
+.welcome-anonymous .card-md,
+.welcome-anonymous .main-content-card {
+  --tblr-bg-surface: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-top: 4px solid var(--brand-accent) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ────────────────────────────────────────────────
+   LOGIN PAGE
+   ──────────────────────────────────────────────── */
+#page.login-page,
+.login-page,
+body.login {
+  background: url('/pics/${BG_FILENAME}') center center / cover no-repeat fixed !important;
+}
+
+.login-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 0;
+}
+
+.login-page .col-md-4,
+.login-page .login-left,
+.login-page .plugin-mod-brand {
+  display: none !important;
+}
+
+.login-page .col-md-8 {
+  max-width: 440px !important;
+  margin: auto !important;
+  flex: none !important;
+}
+
+.login-page .login-box,
+.login-page .card {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--brand-radius) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-top: 4px solid var(--brand-accent) !important;
+}
+
+/* Labels and text inside the login card — white for visibility */
+.login-page .card label,
+.login-page .card .form-label,
+.login-page .card p,
+.login-page .card span:not(.btn *) {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* Input fields — semi-transparent */
+.login-page .form-control,
+.login-page input[type="text"],
+.login-page input[type="password"],
+.login-page select,
+.login-page .form-select {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+  border-radius: var(--brand-radius) !important;
+}
+
+.login-page .form-control::placeholder,
+.login-page input::placeholder {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.login-page .form-control:focus,
+.login-page input:focus {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+  border-color: var(--brand-accent) !important;
+  box-shadow: 0 0 0 3px rgba(207, 191, 17, 0.25) !important;
+  color: #ffffff !important;
+}
+
+/* Select dropdown arrow fix */
+.login-page .form-select option {
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+/* Remember me checkbox label */
+.login-page .form-check-label {
+  color: #ffffff !important;
+}
+
+/* Login to your account header */
+.login-page .card-header,
+.login-page .login-header {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.login-page .login-logo img,
+.login-page img.logo,
+.login-page .logo img {
+  content: url('/pics/${LOGO_LARGE_FILENAME}');
+  max-height: 100px;
+  width: auto;
+  display: block;
+  margin: 0 auto 24px auto;
+}
+
+.login-page .btn-primary,
+.login-page input[type="submit"],
+.login-page button[type="submit"] {
+  background-color: var(--brand-accent) !important;
+  border-color: var(--brand-accent) !important;
+  color: var(--brand-primary) !important;
+  border-radius: var(--brand-radius) !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  width: 100%;
+  text-transform: uppercase;
+  transition: all 0.2s ease-in-out;
+}
+
+.login-page .btn-primary:hover,
+.login-page input[type="submit"]:hover {
+  filter: brightness(1.1);
+}
+
+/* ────────────────────────────────────────────────
+   TOP NAVIGATION BAR
+   ──────────────────────────────────────────────── */
+.glpi-header,
+header.navbar.navbar-expand-md,
+header.navbar-sticky,
+nav.navbar,
+.navbar-default,
+#navbar-menu {
+  background-color: var(--brand-primary) !important;
+  border-bottom: 3px solid var(--brand-accent) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  color: #ffffff !important;
+}
+
+.navbar-nav,
+.navbar-nav-scroll,
+.glpi-header .container-xl,
+.glpi-header .container-fluid {
+  background-color: var(--brand-primary) !important;
+}
+
+.navbar-brand img,
+nav .logo img {
+  max-height: 40px;
+  width: auto;
+}
+
+.navbar-vertical.navbar-collapsed .navbar-brand,
+.navbar-vertical-collapsed .navbar-brand,
+aside.navbar-vertical.navbar-collapsed .navbar-brand {
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  padding: 0.5rem !important;
+  overflow: hidden;
+}
+
+.navbar-vertical.navbar-collapsed .navbar-brand img,
+.navbar-vertical-collapsed .navbar-brand img,
+aside.navbar-vertical.navbar-collapsed .navbar-brand img {
+  max-height: 40px !important;
+  max-width: 40px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain;
+}
+
+.glpi-header .nav-link,
+.glpi-header .nav-link-icon,
+.glpi-header .btn-ghost-secondary,
+.glpi-header .form-control-plaintext,
+.glpi-header .user-menu-name,
+.navbar a,
+nav.navbar .nav-link {
+  color: rgba(255, 255, 255, 0.95) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.glpi-header .input-icon .form-control {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.glpi-header .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* ────────────────────────────────────────────────
+   SIDEBAR (Navy theme)
+   ──────────────────────────────────────────────── */
+aside.navbar-vertical,
+.navbar-vertical,
+#menu-aside,
+#menu,
+.sidebar,
+.side-nav,
+nav.bs-docs-sidebar {
+  background-color: var(--brand-primary) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.navbar-vertical .navbar-brand {
+  background-color: transparent !important;
+  padding: 1.5rem 0.5rem !important;
+}
+
+.navbar-vertical .nav-link,
+.navbar-vertical .nav-link-title,
+.navbar-vertical .nav-link-icon,
+.navbar-vertical .nav-link i,
+.sidebar .menu-item a,
+.side-nav li a {
+  color: rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.navbar-vertical .nav-link:hover,
+.sidebar .menu-item a:hover,
+.side-nav li a:hover {
+  color: #ffffff !important;
+  border-radius: var(--brand-radius);
+}
+
+.navbar-vertical .nav-item.active > .nav-link,
+.navbar-vertical .nav-link.active,
+.sidebar .menu-item.active a,
+.side-nav li.active a {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(21, 43, 82, 0.3);
+}
+
+.navbar-vertical .nav-item.active::before {
+  background-color: var(--brand-accent) !important;
+}
+
+.navbar-vertical .nav-item-search,
+.navbar-vertical .input-group,
+.navbar-vertical .sidebar-search {
+  background-color: var(--brand-primary) !important;
+  border: none !important;
+}
+
+/* ────────────────────────────────────────────────
+   BUTTONS (global)
+   ──────────────────────────────────────────────── */
+.btn { transition: all 0.2s ease-in-out; }
+
+.btn-primary,
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+  border-radius: var(--brand-radius) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--brand-secondary) !important;
+  border-color: var(--brand-secondary) !important;
+  box-shadow: 0 2px 6px rgba(44, 78, 125, 0.4);
+}
+
+.btn-warning, .btn-action {
+  background-color: var(--brand-accent) !important;
+  border-color: var(--brand-accent) !important;
+  border-radius: var(--brand-radius) !important;
+  color: var(--brand-primary) !important;
+  font-weight: 600;
+}
+
+.btn-warning:hover, .btn-action:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 6px rgba(255, 255, 255, 0.4);
+}
+
+/* ────────────────────────────────────────────────
+   CARDS & PANELS
+   ──────────────────────────────────────────────── */
+.card, .x-panel, .tab-content, .glpi-card {
+  border-radius: var(--brand-radius) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
+  border: 1px solid #eef1f5 !important;
+}
+
+.card-header, .x-panel-header {
+  background-color: var(--brand-primary) !important;
+  color: #fff !important;
+  border-radius: var(--brand-radius) var(--brand-radius) 0 0 !important;
+  border-bottom: 2px solid var(--brand-accent) !important;
+}
+
+/* ────────────────────────────────────────────────
+   PAGE TITLE BAR
+   ──────────────────────────────────────────────── */
+.page-header,
+h1.page-header,
+.subheader .page-title {
+  color: var(--brand-primary) !important;
+  border-bottom: 2px solid var(--brand-accent) !important;
+  padding-bottom: 8px;
+  font-weight: 700;
+}
+
+/* ────────────────────────────────────────────────
+   TABLES
+   ──────────────────────────────────────────────── */
+table.tab_cadre_fixe thead tr,
+.table thead tr,
+table thead {
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+thead td, thead th { color: #ffffff !important; }
+td, th { color: #212529 !important; }
+
+table.tab_cadre_fixe tbody tr:hover,
+.table tbody tr:hover {
+  background-color: rgba(44, 78, 125, 0.05) !important;
+}
+
+/* ────────────────────────────────────────────────
+   DROPDOWN MENUS
+   ──────────────────────────────────────────────── */
+.dropdown-menu,
+.dropdown-item,
+.dropdown-menu a,
+.dropdown-menu li a {
+  color: #ffffff !important;
+  background-color: var(--brand-primary) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-menu a:hover {
+  background-color: var(--brand-secondary) !important;
+  color: #ffffff !important;
+}
+
+/* ────────────────────────────────────────────────
+   FORM INPUTS
+   ──────────────────────────────────────────────── */
+.form-control, .form-select, input, textarea, select {
+  color: #212529 !important;
+  background-color: #fff !important;
+}
+
+/* ────────────────────────────────────────────────
+   LINKS
+   ──────────────────────────────────────────────── */
+.main-container a:not(.btn),
+.content a:not(.btn),
+.tab-content a:not(.btn),
+.card-body a:not(.btn),
+.table a:not(.btn) {
+  color: var(--brand-secondary) !important;
+  transition: color 0.2s ease-in-out;
+}
+
+.main-container a:not(.btn):hover,
+.content a:not(.btn):hover {
+  color: var(--brand-accent) !important;
+}
+
+/* ────────────────────────────────────────────────
+   TABS
+   ──────────────────────────────────────────────── */
+.nav-tabs .nav-link,
+ul.tabs li a {
+  color: var(--brand-secondary) !important;
+  font-weight: 500;
+}
+
+.nav-tabs .nav-link.active,
+ul.tabs li.selected a {
+  border-top: 3px solid var(--brand-accent) !important;
+  color: var(--brand-primary) !important;
+  font-weight: 700;
+  background-color: #ffffff !important;
+}
+
+/* ────────────────────────────────────────────────
+   SCROLLBAR (Webkit)
+   ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f4f6f9; }
+::-webkit-scrollbar-thumb {
+  background: var(--brand-secondary);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--brand-primary); }
+
+/* ────────────────────────────────────────────────
+   SEARCH / FILTER BUTTONS (ghost secondary)
+   ──────────────────────────────────────────────── */
+.btn-ghost-secondary,
+.btn.btn-ghost-secondary,
+button.btn-ghost-secondary {
+  background-color: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.btn-ghost-secondary:hover,
+button.btn-ghost-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  color: #ffffff !important;
+}
+
+/* Search/Sort bar row */
+.search-container .btn,
+.search-form .btn-ghost-secondary,
+.show-search-filters,
+button.show-search-filters {
+  background-color: var(--brand-primary) !important;
+  border: 1px solid var(--brand-accent) !important;
+  color: #ffffff !important;
+}
+
+.show-search-filters:hover {
+  background-color: var(--brand-secondary) !important;
+  color: #ffffff !important;
+}
+
+/* Search icon button in top navbar (btn-link) */
+.glpi-header button.btn-link,
+.glpi-header .btn.btn-link,
+header button.btn-link,
+header .btn.btn-link {
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border: none !important;
+}
+
+.glpi-header button.btn-link:hover,
+header button.btn-link:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-radius: var(--brand-radius);
+}
+
+CSSEOF
+echo "✅ CSS file written to: $CUSTOM_CSS_FILE"
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔒 Phase 4: Setting Permissions..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+chown -R $WEB_USER:$WEB_GROUP "$GLPI_DIR/plugins/$FINAL_PLUGIN_FOLDER"
+chown -R $WEB_USER:$WEB_GROUP "$GLPI_DIR/public/pics"
+chown     $WEB_USER:$WEB_GROUP "$CUSTOM_CSS_FILE"
+find "$GLPI_DIR/plugins/$FINAL_PLUGIN_FOLDER" -type f -exec chmod 0644 {} \;
+find "$GLPI_DIR/plugins/$FINAL_PLUGIN_FOLDER" -type d -exec chmod 0755 {} \;
+chmod 0644 "$CUSTOM_CSS_FILE"
+echo "✅ Permissions set."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚙️  Phase 5: Activating Plugin via GLPI Console..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cd "$GLPI_DIR"
+sudo -u $WEB_USER php bin/console glpi:plugin:install  "$FINAL_PLUGIN_FOLDER" --no-interaction || true
+sudo -u $WEB_USER php bin/console glpi:plugin:activate "$FINAL_PLUGIN_FOLDER" --no-interaction || true
+echo "✅ Plugin activated."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "💾 Phase 6: Configuring plugin via PHP..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+PLUGIN_DOC_DIR=""
+for candidate in \
+    "/var/lib/glpi/_plugins/mod" \
+    "/var/www/html/glpi/files/_plugins/mod" \
+    "/usr/share/glpi/files/_plugins/mod"; do
+  if [ -d "$candidate" ]; then
+    PLUGIN_DOC_DIR="$candidate"
+    break
+  fi
+done
+if [ -z "$PLUGIN_DOC_DIR" ]; then
+  PLUGIN_DOC_DIR="/var/lib/glpi/_plugins/mod"
+fi
+
+PLUGIN_IMAGES_DIR="$PLUGIN_DOC_DIR/images"
+mkdir -p "$PLUGIN_IMAGES_DIR" "$PLUGIN_DOC_DIR/backups"
+echo "   Plugin doc dir : $PLUGIN_DOC_DIR"
+
+cp "$GLPI_DIR/public/pics/$BG_FILENAME"           "$PLUGIN_IMAGES_DIR/background.jpg"
+cp "$GLPI_DIR/public/pics/$LOGO_SMALL_FILENAME"   "$PLUGIN_IMAGES_DIR/logo-G-100.png"
+cp "$GLPI_DIR/public/pics/$LOGO_MEDIUM_FILENAME"  "$PLUGIN_IMAGES_DIR/logo-GLPI-100.png"
+cp "$GLPI_DIR/public/pics/$LOGO_LARGE_FILENAME"   "$PLUGIN_IMAGES_DIR/logo-GLPI-250.png"
+echo "✅ Images copied to plugin current dir"
+
+PHP_SCRIPT=$(mktemp /tmp/.glpi_apply.XXXXXX.php)
+cat > "$PHP_SCRIPT" << 'ENDPHP'
+<?php
+define('GLPI_ROOT', '/var/www/html/glpi');
+chdir(GLPI_ROOT);
+require_once GLPI_ROOT . '/vendor/autoload.php';
+require_once GLPI_ROOT . '/plugins/mod/vendor/autoload.php';
+if (!defined('GLPI_PLUGIN_DOC_DIR')) {
+    foreach (['/var/lib/glpi/_plugins', '/var/www/html/glpi/files/_plugins'] as $c) {
+        if (is_dir($c)) { define('GLPI_PLUGIN_DOC_DIR', $c); break; }
+    }
+    if (!defined('GLPI_PLUGIN_DOC_DIR')) define('GLPI_PLUGIN_DOC_DIR', '/var/lib/glpi/_plugins');
+}
+$bm = new GlpiPlugin\Mod\BrandManager();
+$bm->applyResource('background');  echo "✅ Applied background\n";
+$bm->applyResource('logo_s');      echo "✅ Applied logo_s\n";
+$bm->applyResource('logo_m');      echo "✅ Applied logo_m\n";
+$bm->applyResource('logo_l');      echo "✅ Applied logo_l\n";
+$bm->applyResource('favicon');     echo "✅ Applied favicon\n";
+$bm->changeTitle($argv[1]);        echo "✅ Title set to: " . $argv[1] . "\n";
+$bm->applyLoginPageModifier();     echo "✅ Login page modifier enabled\n";
+ENDPHP
+
+sudo -u $WEB_USER php "$PHP_SCRIPT" "$ORG_TITLE" 2>&1 || {
+  echo "⚠️  PHP apply failed — falling back to direct file copy..."
+  LOGOS_DIR="$GLPI_DIR/public/pics/logos"
+  mkdir -p "$LOGOS_DIR"
+  for variant in black grey white; do
+    cp "$GLPI_DIR/public/pics/$LOGO_SMALL_FILENAME"  "$LOGOS_DIR/logo-G-100-${variant}.png"
+    cp "$GLPI_DIR/public/pics/$LOGO_MEDIUM_FILENAME" "$LOGOS_DIR/logo-GLPI-100-${variant}.png"
+    cp "$GLPI_DIR/public/pics/$LOGO_LARGE_FILENAME"  "$LOGOS_DIR/logo-GLPI-250-${variant}.png"
+  done
+  chown -R $WEB_USER:$WEB_GROUP "$LOGOS_DIR"
+  echo "✅ Fallback: logos copied directly to active paths"
+}
+rm -f "$PHP_SCRIPT"
+
+cat > "$PLUGIN_DOC_DIR/modifiers.ini" << INIEOF
+title=${ORG_TITLE}
+login=1
+INIEOF
+
+chown -R $WEB_USER:$WEB_GROUP "$PLUGIN_DOC_DIR"
+echo "✅ Plugin configuration complete."
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🎨 Phase 7: Enabling native CSS customization in GLPI..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+MYCNF=$(mktemp /tmp/.myconf.XXXXXX)
+chmod 600 "$MYCNF"
+printf '[client]\nhost=localhost\nuser=%s\npassword=%s\n' "$DB_USER" "$DB_PASS" > "$MYCNF"
+
+mysql --defaults-extra-file="$MYCNF" "$DB_NAME" \
+  -e "SELECT id, name, enable_custom_css FROM glpi_entities WHERE id=0;" 2>&1
+
+PY_SCRIPT=$(mktemp /tmp/.glpi_py.XXXXXX.py)
+SQL_FILE=$(mktemp /tmp/.glpi_css.XXXXXX.sql)
+chmod 600 "$PY_SCRIPT" "$SQL_FILE"
+
+cat > "$PY_SCRIPT" << 'ENDPY'
+import sys
+with open(sys.argv[1]) as f:
+    css = f.read()
+css = css.replace("'", "''")
+sql = "UPDATE glpi_entities SET enable_custom_css = 1, custom_css_code = '" + css + "' WHERE id = 0;"
+with open(sys.argv[2], 'w') as f:
+    f.write(sql)
+ENDPY
+
+python3 "$PY_SCRIPT" "$CUSTOM_CSS_FILE" "$SQL_FILE"
+mysql --defaults-extra-file="$MYCNF" "$DB_NAME" < "$SQL_FILE"
+CSS_EXIT=$?
+rm -f "$MYCNF" "$SQL_FILE" "$PY_SCRIPT"
+
+if [ $CSS_EXIT -ne 0 ]; then
+  echo "❌ Failed to inject CSS into glpi_entities (exit $CSS_EXIT)"
+else
+  echo "✅ CSS customization enabled on Root Entity (id=0)"
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🧹 Phase 8: Clearing GLPI Cache..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+cd "$GLPI_DIR"
+sudo -u $WEB_USER php bin/console glpi:cache:clear --no-interaction
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ ALL DONE!"
+echo ""
+echo "   GLPI URL  : http://$(hostname -I | awk '{print $1}')/"
+echo "   Username  : glpi"
+echo "   Password  : glpi   ← CHANGE THIS IMMEDIATELY"
+echo ""
+echo "   DB Name   : $DB_NAME"
+echo "   DB User   : $DB_USER"
+echo "   Org Title : $ORG_TITLE"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
