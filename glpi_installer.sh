@@ -37,7 +37,7 @@ LOGO_LARGE_FILENAME="custom_org_logo_large.png"
 LOGO_FILENAME="$LOGO_LARGE_FILENAME"
 
 # Organization
-ORG_TITLE="My Organization IT Portal"
+ORG_TITLE="Navy IT Portal"
 AUTH_LABEL="Navy Internal Database"  # Text shown in login source dropdown
 
 # CSS output path
