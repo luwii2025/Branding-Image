@@ -221,6 +221,7 @@ body, .page, .main-container {
   --brand-accent    : #cfbf11;
   --brand-secondary : #2d6ca8;
   --brand-radius    : 8px;
+  --
 }
 
 /* ── Override Tabler UI surface variable on login page ── */
@@ -558,7 +559,7 @@ table thead {
   color: #ffffff !important;
 }
 
-thead td, thead th { color: #ffffff !important; }
+thead td, thead th { color: #2a3666 !important; }
 td, th { color: #212529 !important; }
 
 table.tab_cadre_fixe tbody tr:hover,
@@ -671,7 +672,7 @@ button.show-search-filters {
 header button.btn-link,
 header .btn.btn-link {
   background-color: transparent !important;
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(95, 95, 95, 0.9) !important;
   border: none !important;
 }
 
@@ -694,6 +695,15 @@ a.copyright {
 
 .input-group-text {
   background-color: rgb(255, 255, 255) !important;
+}
+
+/* Or target the specific combination of classes */
+.mt-1.small.text-muted-menu {
+  color: var(--brand-accent) !important; /* Uses your Gold accent color */
+}
+
+header.navbar .user-menu .dropdown-menu .dropdown-header {
+  color: #ffffff !important;
 }
 
 CSSEOF
