@@ -374,7 +374,6 @@ nav.navbar,
 #navbar-menu {
   background-color: var(--brand-primary) !important;
   border-bottom: 3px solid var(--brand-accent) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   color: #ffffff !important;
 }
 
@@ -705,6 +704,11 @@ a.copyright {
 header.navbar .user-menu .dropdown-menu .dropdown-header {
   color: #ffffff !important;
 }
+
+body.helpdesk header.navbar.topbar {
+  background-color: rgb(26, 58, 92) !important;
+}
+
 
 CSSEOF
 echo "✅ CSS file written to: $CUSTOM_CSS_FILE"
