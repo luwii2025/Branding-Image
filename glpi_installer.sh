@@ -20,7 +20,7 @@ DB_PASS='S3rv1c31T+'
 DB_HOST="localhost"
 
 # Plugin
-PLUGIN_URL="https://github.com/i-Vertix/glpi-modifications/releases/download/11.0.6/glpi-mod-11.0.3.tar.gz"
+PLUGIN_URL="https://github.com/i-Vertix/glpi-modifications/releases/download/11.0.5/glpi-mod-11.0.5.tar.gz"
 DOWNLOAD_DEST="/tmp/glpi-mod.tar.gz"
 FINAL_PLUGIN_FOLDER="mod"
 
